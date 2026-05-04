@@ -1,0 +1,1788 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>台股外資連買五天篩選</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: rgba(255, 255, 255, 0.92);
+      --card-strong: #ffffff;
+      --text: #16324f;
+      --muted: #60758a;
+      --primary: #0c7c59;
+      --primary-soft: #d8f2e8;
+      --danger: #cf3f3f;
+      --line: #d7e1ea;
+      --surface-soft: #eef5fb;
+      --surface-strong: #f7fafc;
+      --hero-a: rgba(255, 255, 255, 0.98);
+      --hero-b: rgba(240, 249, 245, 0.94);
+      --status-border: #d4e4f2;
+      --status-text: #24507a;
+      --tab-idle: #edf4fa;
+      --tab-idle-text: #335574;
+      --row-hover: rgba(12, 124, 89, 0.04);
+      --canvas-bg: #ffffff;
+      --shadow: 0 18px 40px rgba(34, 61, 93, 0.12);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #07131d;
+        --card: rgba(10, 24, 35, 0.88);
+        --card-strong: #0d1c28;
+        --text: #ecf5ff;
+        --muted: #98afc3;
+        --primary: #41c08f;
+        --primary-soft: rgba(65, 192, 143, 0.18);
+        --danger: #ff7d7d;
+        --line: rgba(152, 175, 195, 0.18);
+        --surface-soft: rgba(27, 44, 58, 0.88);
+        --surface-strong: rgba(18, 33, 45, 0.95);
+        --hero-a: rgba(9, 20, 30, 0.96);
+        --hero-b: rgba(13, 38, 33, 0.92);
+        --status-border: rgba(92, 132, 166, 0.38);
+        --status-text: #c7e0f3;
+        --tab-idle: rgba(26, 43, 58, 0.92);
+        --tab-idle-text: #c7dae8;
+        --row-hover: rgba(65, 192, 143, 0.08);
+        --canvas-bg: #0d1c28;
+        --shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Noto Sans TC", "PingFang TC", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(12, 124, 89, 0.12), transparent 28%),
+        radial-gradient(circle at top right, rgba(35, 90, 166, 0.14), transparent 24%),
+        linear-gradient(180deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 85%, white) 100%);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, var(--hero-a), var(--hero-b));
+      border: 1px solid rgba(215, 225, 234, 0.95);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 28px;
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(28px, 4vw, 40px);
+      line-height: 1.1;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+      max-width: 820px;
+    }
+
+    .controls,
+    .summary-grid,
+    .panel {
+      margin-top: 20px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: end;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 220px;
+      flex: 1;
+    }
+
+    .field label {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    input[type="date"],
+    input[type="number"] {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 16px;
+      color: var(--text);
+      background: var(--card-strong);
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 20px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--primary);
+      color: #fff;
+      min-width: 150px;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+      transform: none;
+    }
+
+    .hint {
+      width: 100%;
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .status {
+      margin-top: 16px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: var(--surface-soft);
+      border: 1px solid var(--status-border);
+      color: var(--status-text);
+      line-height: 1.6;
+    }
+
+    .status.error {
+      background: #fff0f0;
+      border-color: #f2cccc;
+      color: var(--danger);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .stat-card strong {
+      font-size: 32px;
+      line-height: 1;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 18px 20px 8px;
+    }
+
+    .panel-header h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+    }
+
+    .panel-header p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .dates {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 0 20px 20px;
+    }
+
+    .date-chip {
+      padding: 10px 14px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-top: 1px solid var(--line);
+    }
+
+    .table-wrap.mobile-cards {
+      overflow-x: visible;
+    }
+
+    .clickable-row {
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 920px;
+    }
+
+    th,
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      background: var(--surface-strong);
+      font-size: 14px;
+      color: var(--muted);
+      position: sticky;
+      top: 0;
+    }
+
+    tbody tr:hover {
+      background: var(--row-hover);
+    }
+
+    .mono {
+      font-variant-numeric: tabular-nums;
+      font-family: "SFMono-Regular", "Menlo", monospace;
+    }
+
+    .buy {
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .sell {
+      color: var(--danger);
+      font-weight: 700;
+    }
+
+    .empty {
+      padding: 28px 20px 32px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .detail-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(6, 14, 23, 0.58);
+      backdrop-filter: blur(6px);
+    }
+
+    .detail-modal[hidden] {
+      display: none;
+    }
+
+    .detail-shell {
+      width: min(1080px, 100%);
+      max-height: calc(100vh - 48px);
+      overflow: auto;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      background: linear-gradient(180deg, var(--surface-soft), var(--card-strong));
+    }
+
+    .detail-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: end;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .detail-head h3 {
+      margin: 0 0 6px;
+      font-size: 24px;
+    }
+
+    .detail-head p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .detail-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .detail-close {
+      min-width: 0;
+      padding: 10px 14px;
+      font-size: 14px;
+      background: var(--tab-idle);
+      color: var(--tab-idle-text);
+    }
+
+    .mode-switch {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 14px 0 18px;
+    }
+
+    .mode-btn {
+      min-width: 0;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      background: var(--tab-idle);
+      color: var(--tab-idle-text);
+    }
+
+    .mode-btn.active {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .meta-chip {
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: var(--tab-idle);
+      color: var(--tab-idle-text);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .chart-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+    }
+
+    .chart-card h4 {
+      margin: 0 0 6px;
+      font-size: 18px;
+    }
+
+    .chart-card p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 240px;
+      display: block;
+    }
+
+    .detail-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--card-strong);
+    }
+
+    .subtle-button {
+      background: var(--tab-idle);
+      color: var(--tab-idle-text);
+    }
+
+    .smart-layout {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      padding: 0 20px 20px;
+    }
+
+    .smart-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      background: var(--card);
+    }
+
+    .smart-card h4 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    .smart-card p {
+      margin: 0 0 12px;
+      line-height: 1.6;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .smart-toolbar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 0 20px 20px;
+      align-items: center;
+    }
+
+    .smart-status {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .footer-note {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .info-note {
+      margin-top: 16px;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--card);
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .info-note strong {
+      color: var(--text);
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .tab-btn {
+      min-width: 0;
+      background: var(--tab-idle);
+      color: var(--tab-idle-text);
+      border: 1px solid var(--line);
+      box-shadow: none;
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    @media (max-width: 720px) {
+      .container {
+        padding: 20px 14px 40px;
+      }
+
+      .hero,
+      .controls,
+      .stat-card,
+      .panel {
+        border-radius: 18px;
+      }
+
+      .hero {
+        padding: 22px;
+      }
+
+      .hero h1 {
+        font-size: 28px;
+      }
+
+      .tabs {
+        gap: 10px;
+      }
+
+      .tab-btn,
+      button,
+      .field {
+        width: 100%;
+      }
+
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .panel-header {
+        padding: 16px 16px 8px;
+      }
+
+      .dates,
+      .smart-toolbar,
+      .smart-layout {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      .smart-layout {
+        grid-template-columns: 1fr;
+      }
+
+      table {
+        min-width: 0;
+      }
+
+      .table-wrap {
+        overflow-x: visible;
+      }
+
+      .table-wrap table,
+      .detail-table-wrap table {
+        border-collapse: separate;
+        border-spacing: 0 12px;
+      }
+
+      .table-wrap thead,
+      .detail-table-wrap thead {
+        display: none;
+      }
+
+      .table-wrap tbody,
+      .detail-table-wrap tbody {
+        display: block;
+        padding: 0 12px 12px;
+      }
+
+      .table-wrap tr,
+      .detail-table-wrap tr {
+        display: block;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--card-strong);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
+        overflow: hidden;
+      }
+
+      .table-wrap td,
+      .detail-table-wrap td {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+        padding: 10px 14px;
+        text-align: right;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .table-wrap td:last-child,
+      .detail-table-wrap td:last-child {
+        border-bottom: 0;
+      }
+
+      .table-wrap td::before,
+      .detail-table-wrap td::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        text-align: left;
+      }
+
+      .table-wrap td[colspan],
+      .detail-table-wrap td[colspan] {
+        display: block;
+        text-align: left;
+      }
+
+      .table-wrap td[colspan]::before,
+      .detail-table-wrap td[colspan]::before {
+        content: none;
+      }
+
+      .detail-modal {
+        padding: 10px;
+      }
+
+      .detail-shell {
+        max-height: calc(100vh - 20px);
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <h1>台股外資連續買超篩選器</h1>
+      <p>
+        依據台灣證交所三大法人買賣超 API，自動往前抓最近連續 7 個有資料的交易日，
+        篩出外資在這段期間內曾經連續買超至少指定天數的股票，讓你一眼看出外資持續加碼標的。
+      </p>
+    </section>
+
+    <section class="controls">
+      <div class="field">
+        <label for="endDate">查詢截止日</label>
+        <input id="endDate" type="date" />
+      </div>
+      <div class="field">
+        <label for="minStreak">連續買超至少幾天</label>
+        <input id="minStreak" type="number" min="1" max="7" step="1" value="3" />
+      </div>
+      <button id="loadBtn">開始查詢</button>
+      <p class="hint">系統會從你輸入的日期往前回推，直到找到最近 7 個有資料的台股交易日。</p>
+    </section>
+
+    <div id="status" class="status">準備就緒，請按下「開始查詢」。</div>
+
+    <section class="summary-grid">
+      <div class="stat-card">
+        <span>符合條件股票數</span>
+        <strong id="stockCount">0</strong>
+      </div>
+      <div class="stat-card">
+        <span>最近有效交易日</span>
+        <strong id="latestDate" class="mono">-</strong>
+      </div>
+      <div class="stat-card">
+        <span>使用交易日數</span>
+        <strong id="usedDays">0</strong>
+      </div>
+    </section>
+
+    <nav class="tabs" aria-label="查詢功能頁籤">
+      <button class="tab-btn active" data-tab="final" type="button">最終策略輸出</button>
+      <button class="tab-btn" data-tab="strategy" type="button">公開資料策略</button>
+      <button class="tab-btn" data-tab="foreign" type="button">外資連續買超至少天數</button>
+    </nav>
+
+    <section id="tab-foreign" class="tab-panel">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>最近 7 個有效交易日</h2>
+          <p>只有實際有資料的交易日才會列入統計，週末與休市日會自動跳過。</p>
+        </div>
+        <div id="dateChips" class="dates"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2 id="resultTitle">外資連續買超至少 3 天</h2>
+          <p>表格依最近有效交易日的價量排名，由高到低排序。這裡的價量採用成交金額作為排序依據。</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>價量排名</th>
+                <th>股票代號</th>
+                <th>股票名稱</th>
+                <th>最新收盤價</th>
+                <th>最新成交股數</th>
+                <th>最新成交金額</th>
+                <th>最長連買天數</th>
+                <th>連買區間</th>
+                <th>7 日合計</th>
+                <th>每日外資買賣超</th>
+              </tr>
+            </thead>
+            <tbody id="resultBody"></tbody>
+          </table>
+        </div>
+        <div id="emptyState" class="empty">尚未查詢資料。</div>
+        <div id="detailPanel" class="detail-modal" hidden>
+          <div class="detail-shell" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+            <div class="detail-head">
+              <div>
+                <h3 id="detailTitle">股票詳細資料</h3>
+                <p id="detailDesc">點擊上方任一檔股票後，這裡會顯示最近 7 個交易日的外資買賣超張數與估算成本。</p>
+              </div>
+              <div id="detailMeta" class="detail-meta"></div>
+              <button id="detailCloseBtn" class="detail-close" type="button">關閉</button>
+            </div>
+
+            <div class="mode-switch">
+              <button id="closeModeBtn" class="mode-btn active" type="button">收盤價估算</button>
+              <button id="avgModeBtn" class="mode-btn" type="button">成交均價估算</button>
+            </div>
+
+            <div class="chart-grid">
+              <div class="chart-card">
+                <h4>每日外資買賣超張數</h4>
+                <p>正值代表買超，負值代表賣超，單位為張。</p>
+                <canvas id="lotsChart" width="560" height="240"></canvas>
+              </div>
+              <div class="chart-card">
+                <h4>每日估算買超成本</h4>
+                <p id="costChartDesc">以當日收盤價估算，僅供參考，不代表法人實際成交成本。</p>
+                <canvas id="costChart" width="560" height="240"></canvas>
+              </div>
+            </div>
+
+            <div class="detail-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>外資買賣超股數</th>
+                    <th>外資買賣超張數</th>
+                    <th>收盤價</th>
+                    <th>成交均價</th>
+                    <th>估算買超成本</th>
+                  </tr>
+                </thead>
+                <tbody id="detailBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="tab-strategy" class="tab-panel">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>公開資料策略</h2>
+          <p>這一區改用實際公開資料：近 5 個交易日的 TWSE 三大法人買賣超，加上本機 TDCC 集保快照，做出可直接參考的近似版篩選。</p>
+        </div>
+        <div class="smart-toolbar">
+          <button id="runSmartMoneyBtn" class="subtle-button" type="button">執行公開資料策略</button>
+          <div id="smartMoneyStatus" class="smart-status">尚未執行，會使用上方同一次查詢的 TWSE 資料，搭配本機 TDCC 集保快照。</div>
+        </div>
+        <div class="smart-layout">
+          <div class="smart-card">
+            <h4>法人候選</h4>
+            <p>條件為近 5 個交易日中，外資連買至少達你設定的天數、買超量遞增，且最新收盤未高於近 5 日估算成本 5%。</p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>股票代號</th>
+                    <th>股票名稱</th>
+                    <th>連買天數</th>
+                    <th>加權平均成本</th>
+                    <th>價差百分比</th>
+                  </tr>
+                </thead>
+                <tbody id="smartMoneyCandidatesBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="smart-card">
+            <h4>籌碼集中驗證</h4>
+            <p>使用 TDCC 最新集保快照，觀察戶數與大戶持股比。因為目前只有單週快照，這裡採用「快照代理指標」，不是四週趨勢版。</p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>股票代號</th>
+                    <th>最新戶數</th>
+                    <th>戶均張數</th>
+                    <th>400 張以上持股比</th>
+                    <th>千張以上持股比</th>
+                    <th>快照判定</th>
+                  </tr>
+                </thead>
+                <tbody id="chipCheckBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="tab-final" class="tab-panel active">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>最終策略輸出</h2>
+          <p>整合法人候選與 TDCC 快照後的最後結果。若股價已高於估算成本 8%，但集保仍是單週快照，會標示追價風險。</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>股票代號</th>
+                <th>股票名稱</th>
+                <th>價差百分比</th>
+                <th>籌碼集中</th>
+                <th>追價風險</th>
+                <th>資料註記</th>
+              </tr>
+            </thead>
+            <tbody id="smartMoneyReportBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <p class="footer-note">
+      資料來源：台灣證券交易所 `T86`、`STOCK_DAY_ALL` API，以及本機 TDCC 集保快照。程式採用 `yyyyMMdd` 查詢格式，並以「外陸資買賣超股數(不含外資自營商)」作為外資買賣超判斷依據。
+    </p>
+    <div class="info-note">
+      <strong>TDCC 快照說明：</strong>
+      本頁實際使用的是 `tdcc_snapshot.js`。它是由 TDCC 官方開放資料原始檔 `tdcc_shareholding_latest.csv`
+      整理出的前端快照版本，用來加快頁面讀取。若你之後要更新集保資料，先重新下載最新 CSV，再重新產生新的 `tdcc_snapshot.js` 即可。
+    </div>
+  </div>
+
+  <script>
+    const FUND_API_URL = "https://www.twse.com.tw/rwd/zh/fund/T86";
+    const PRICE_VOLUME_API_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL";
+    const DAY_COUNT = 7;
+    const DEFAULT_MIN_STREAK = 3;
+
+    const statusEl = document.getElementById("status");
+    const loadBtn = document.getElementById("loadBtn");
+    const endDateInput = document.getElementById("endDate");
+    const minStreakInput = document.getElementById("minStreak");
+    const stockCountEl = document.getElementById("stockCount");
+    const latestDateEl = document.getElementById("latestDate");
+    const usedDaysEl = document.getElementById("usedDays");
+    const dateChipsEl = document.getElementById("dateChips");
+    const resultBodyEl = document.getElementById("resultBody");
+    const resultTitleEl = document.getElementById("resultTitle");
+    const emptyStateEl = document.getElementById("emptyState");
+    const detailPanelEl = document.getElementById("detailPanel");
+    const detailTitleEl = document.getElementById("detailTitle");
+    const detailDescEl = document.getElementById("detailDesc");
+    const detailMetaEl = document.getElementById("detailMeta");
+    const detailBodyEl = document.getElementById("detailBody");
+    const lotsChartEl = document.getElementById("lotsChart");
+    const costChartEl = document.getElementById("costChart");
+    const detailCloseBtn = document.getElementById("detailCloseBtn");
+    const closeModeBtn = document.getElementById("closeModeBtn");
+    const avgModeBtn = document.getElementById("avgModeBtn");
+    const costChartDescEl = document.getElementById("costChartDesc");
+    const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
+    const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
+
+    let selectedCostMode = "close";
+    let currentSelectedCode = null;
+    let stocksCache = [];
+
+    function publishAnalysisContext(context) {
+      window.foreignPageContext = context;
+      window.dispatchEvent(new CustomEvent("foreign-data-updated", { detail: context }));
+    }
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle("error", isError);
+    }
+
+    function formatDateForApi(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}${month}${day}`;
+    }
+
+    function formatDateForInput(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function formatDisplayDate(dateString) {
+      return `${dateString.slice(0, 4)}/${dateString.slice(4, 6)}/${dateString.slice(6, 8)}`;
+    }
+
+    function previousDate(date) {
+      const next = new Date(date);
+      next.setDate(next.getDate() - 1);
+      return next;
+    }
+
+    function parseNumber(value) {
+      return Number(String(value).replaceAll(",", "").trim()) || 0;
+    }
+
+    function getThemeValue(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function closeDetailModal() {
+      detailPanelEl.hidden = true;
+      document.body.style.overflow = "";
+    }
+
+    function setActiveTab(tabName) {
+      tabButtons.forEach((button) => {
+        button.classList.toggle("active", button.dataset.tab === tabName);
+      });
+      tabPanels.forEach((panel) => {
+        panel.classList.toggle("active", panel.id === `tab-${tabName}`);
+      });
+    }
+
+    function getMinStreak() {
+      const value = Number(minStreakInput.value);
+      if (!Number.isInteger(value) || value < 1) {
+        return DEFAULT_MIN_STREAK;
+      }
+      return Math.min(value, DAY_COUNT);
+    }
+
+    async function fetchDailyData(dateString) {
+      const params = new URLSearchParams({
+        date: dateString,
+        selectType: "ALLBUT0999",
+        response: "json"
+      });
+
+      const response = await fetch(`${FUND_API_URL}?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`API 回應失敗：HTTP ${response.status}`);
+      }
+
+      return response.json();
+    }
+
+    async function fetchPriceVolumeData(dateString) {
+      const params = new URLSearchParams({
+        date: dateString,
+        response: "json"
+      });
+
+      const response = await fetch(`${PRICE_VOLUME_API_URL}?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`價量 API 回應失敗：HTTP ${response.status}`);
+      }
+
+      return response.json();
+    }
+
+    async function buildDailyPriceVolumeMaps(days) {
+      const entries = await Promise.all(
+        days.map(async (day) => {
+          const payload = await fetchPriceVolumeData(day.date);
+          return [day.date, buildPriceVolumeMap(payload)];
+        })
+      );
+
+      return new Map(entries);
+    }
+
+    async function getRecentTradingDays(endDateString, dayCount) {
+      const collected = [];
+      let cursor = new Date(`${endDateString}T12:00:00`);
+      let attempts = 0;
+      const maxAttempts = 45;
+
+      while (collected.length < dayCount && attempts < maxAttempts) {
+        const apiDate = formatDateForApi(cursor);
+        setStatus(`正在查詢 ${apiDate}，已找到 ${collected.length}/${dayCount} 個有效交易日...`);
+
+        const payload = await fetchDailyData(apiDate);
+        if (payload.stat === "OK" && Array.isArray(payload.data) && payload.data.length > 0) {
+          collected.push(payload);
+        }
+
+        cursor = previousDate(cursor);
+        attempts += 1;
+      }
+
+      if (collected.length < dayCount) {
+        throw new Error("在可回溯範圍內找不到足夠的有效交易日資料。");
+      }
+
+      return collected.reverse();
+    }
+
+    function normalizeDailyRows(days) {
+      return days.map((day) => {
+        const foreignNetIndex = day.fields.findIndex(
+          (field) => field === "外陸資買賣超股數(不含外資自營商)"
+        );
+
+        if (foreignNetIndex === -1) {
+          throw new Error("找不到外資買賣超欄位，API 格式可能已變更。");
+        }
+
+        const rows = day.data.map((row) => ({
+          code: row[0].trim(),
+          name: row[1].trim(),
+          foreignNet: parseNumber(row[foreignNetIndex])
+        }));
+
+        return {
+          date: day.date,
+          rows
+        };
+      });
+    }
+
+    function buildPriceVolumeMap(payload) {
+      if (payload.stat !== "OK" || !Array.isArray(payload.data)) {
+        throw new Error("找不到最新交易日的價量資料。");
+      }
+
+      const fieldIndex = {
+        volume: payload.fields.findIndex((field) => field === "成交股數"),
+        amount: payload.fields.findIndex((field) => field === "成交金額"),
+        close: payload.fields.findIndex((field) => field === "收盤價")
+      };
+
+      if (fieldIndex.volume === -1 || fieldIndex.amount === -1 || fieldIndex.close === -1) {
+        throw new Error("價量 API 欄位格式可能已變更。");
+      }
+
+      return new Map(
+        payload.data.map((row) => [
+          row[0].trim(),
+          {
+            close: parseNumber(row[fieldIndex.close]),
+            volume: parseNumber(row[fieldIndex.volume]),
+            amount: parseNumber(row[fieldIndex.amount]),
+            averagePrice: parseNumber(row[fieldIndex.volume]) > 0
+              ? parseNumber(row[fieldIndex.amount]) / parseNumber(row[fieldIndex.volume])
+              : 0
+          }
+        ])
+      );
+    }
+
+    function analyzeStocks(days, latestPriceVolumeMap, dailyPriceVolumeMaps, minStreak) {
+      const stockMap = new Map();
+
+      days.forEach((day, dayIndex) => {
+        day.rows.forEach((row) => {
+          if (!stockMap.has(row.code)) {
+            stockMap.set(row.code, {
+              code: row.code,
+              name: row.name,
+              dailyNet: Array(days.length).fill(0)
+            });
+          }
+
+          const stock = stockMap.get(row.code);
+          stock.name = row.name;
+          stock.dailyNet[dayIndex] = row.foreignNet;
+        });
+      });
+
+      return Array.from(stockMap.values())
+        .map((stock) => {
+          let bestStart = -1;
+          let bestEnd = -1;
+          let bestStreak = 0;
+          let currentStart = -1;
+          let currentStreak = 0;
+
+          stock.dailyNet.forEach((value, index) => {
+            if (value > 0) {
+              if (currentStreak === 0) {
+                currentStart = index;
+              }
+              currentStreak += 1;
+
+              if (currentStreak > bestStreak) {
+                bestStreak = currentStreak;
+                bestStart = currentStart;
+                bestEnd = index;
+              }
+            } else {
+              currentStreak = 0;
+              currentStart = -1;
+            }
+          });
+
+          const priceVolume = latestPriceVolumeMap.get(stock.code) || {
+            close: 0,
+            volume: 0,
+            amount: 0
+          };
+
+          const detail = days.map((day, index) => {
+            const dayPriceVolume = dailyPriceVolumeMaps.get(day.date)?.get(stock.code) || {
+              close: 0,
+              volume: 0,
+              amount: 0,
+              averagePrice: 0
+            };
+            const netShares = stock.dailyNet[index];
+            const netLots = netShares / 1000;
+            const estimatedCostByClose = netShares > 0 ? netShares * dayPriceVolume.close : 0;
+            const estimatedCostByAverage = netShares > 0 ? netShares * dayPriceVolume.averagePrice : 0;
+
+            return {
+              date: day.date,
+              netShares,
+              netLots,
+              closePrice: dayPriceVolume.close,
+              averagePrice: dayPriceVolume.averagePrice,
+              estimatedCostByClose,
+              estimatedCostByAverage
+            };
+          });
+
+          return {
+            ...stock,
+            closePrice: priceVolume.close,
+            latestVolume: priceVolume.volume,
+            latestAmount: priceVolume.amount,
+            detail,
+            totalNet: stock.dailyNet.reduce((sum, value) => sum + value, 0),
+            bestStreak,
+            streakRange:
+              bestStreak >= minStreak
+                ? `${formatDisplayDate(days[bestStart].date)} - ${formatDisplayDate(days[bestEnd].date)}`
+                : "-"
+          };
+        })
+        .filter((stock) => stock.bestStreak >= minStreak)
+        .sort((a, b) => {
+          if (b.latestAmount !== a.latestAmount) {
+            return b.latestAmount - a.latestAmount;
+          }
+          if (b.bestStreak !== a.bestStreak) {
+            return b.bestStreak - a.bestStreak;
+          }
+          return b.totalNet - a.totalNet;
+        });
+    }
+
+    function renderDateChips(days) {
+      dateChipsEl.innerHTML = days
+        .map((day) => `<div class="date-chip mono">${formatDisplayDate(day.date)}</div>`)
+        .join("");
+    }
+
+    function renderResults(stocks) {
+      if (stocks.length === 0) {
+        resultBodyEl.innerHTML = "";
+        emptyStateEl.textContent = `最近 7 個交易日內，沒有股票符合外資連續買超至少 ${getMinStreak()} 天。`;
+        emptyStateEl.style.display = "block";
+        detailPanelEl.hidden = true;
+        return;
+      }
+
+      resultBodyEl.innerHTML = stocks
+        .map((stock, index) => {
+          const dailyCells = stock.dailyNet
+            .map((value) => {
+              const cssClass = value > 0 ? "buy" : value < 0 ? "sell" : "";
+              return `<span class="mono ${cssClass}">${value.toLocaleString()}</span>`;
+            })
+            .join("<br>");
+
+          const totalClass = stock.totalNet > 0 ? "buy" : stock.totalNet < 0 ? "sell" : "";
+
+          return `
+            <tr class="clickable-row" data-code="${stock.code}">
+              <td class="mono" data-label="價量排名">${index + 1}</td>
+              <td class="mono" data-label="股票代號">${stock.code}</td>
+              <td data-label="股票名稱">${stock.name}</td>
+              <td class="mono" data-label="最新收盤價">${stock.closePrice.toLocaleString()}</td>
+              <td class="mono" data-label="最新成交股數">${stock.latestVolume.toLocaleString()}</td>
+              <td class="mono" data-label="最新成交金額">${stock.latestAmount.toLocaleString()}</td>
+              <td class="mono buy" data-label="最長連買天數">${stock.bestStreak}</td>
+              <td class="mono" data-label="連買區間">${stock.streakRange}</td>
+              <td class="mono ${totalClass}" data-label="7 日合計">${stock.totalNet.toLocaleString()}</td>
+              <td data-label="每日外資買賣超">${dailyCells}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      emptyStateEl.style.display = "none";
+
+      Array.from(resultBodyEl.querySelectorAll("tr")).forEach((row) => {
+        row.addEventListener("click", () => {
+          const stock = stocks.find((item) => item.code === row.dataset.code);
+          if (stock) {
+            renderDetail(stock);
+          }
+        });
+      });
+    }
+
+    function formatCurrency(value) {
+      return new Intl.NumberFormat("zh-TW", {
+        style: "currency",
+        currency: "TWD",
+        maximumFractionDigits: 0
+      }).format(value);
+    }
+
+    function updateModeButtons() {
+      closeModeBtn.classList.toggle("active", selectedCostMode === "close");
+      avgModeBtn.classList.toggle("active", selectedCostMode === "average");
+      costChartDescEl.textContent =
+        selectedCostMode === "close"
+          ? "以當日收盤價估算，僅供參考，不代表法人實際成交成本。"
+          : "以當日成交均價估算，較貼近當日市場平均成交價格，但仍不代表法人實際成交成本。";
+    }
+
+    function drawBarChart(canvas, values, labels, colorPositive, colorNegative, formatter) {
+      const ctx = canvas.getContext("2d");
+      const width = canvas.width;
+      const height = canvas.height;
+      const padding = { top: 18, right: 18, bottom: 42, left: 54 };
+      const chartWidth = width - padding.left - padding.right;
+      const chartHeight = height - padding.top - padding.bottom;
+      const maxAbs = Math.max(...values.map((value) => Math.abs(value)), 1);
+      const zeroY = padding.top + chartHeight / 2;
+      const barWidth = chartWidth / values.length * 0.58;
+      const canvasBg = getThemeValue("--canvas-bg");
+      const lineColor = getThemeValue("--line");
+      const mutedColor = getThemeValue("--muted");
+      const textColor = getThemeValue("--text");
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = canvasBg;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padding.left, zeroY);
+      ctx.lineTo(width - padding.right, zeroY);
+      ctx.stroke();
+
+      values.forEach((value, index) => {
+        const x = padding.left + (chartWidth / values.length) * index + ((chartWidth / values.length) - barWidth) / 2;
+        const barHeight = (Math.abs(value) / maxAbs) * (chartHeight / 2 - 10);
+        const y = value >= 0 ? zeroY - barHeight : zeroY;
+
+        ctx.fillStyle = value >= 0 ? colorPositive : colorNegative;
+        ctx.fillRect(x, y, barWidth, barHeight);
+
+        ctx.fillStyle = mutedColor;
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(labels[index], x + barWidth / 2, height - 16);
+
+        ctx.fillStyle = textColor;
+        ctx.font = "10px sans-serif";
+        ctx.fillText(formatter(value), x + barWidth / 2, value >= 0 ? y - 6 : y + barHeight + 12);
+      });
+    }
+
+    function drawCostChart(canvas, values, labels) {
+      const ctx = canvas.getContext("2d");
+      const width = canvas.width;
+      const height = canvas.height;
+      const padding = { top: 18, right: 18, bottom: 42, left: 62 };
+      const chartWidth = width - padding.left - padding.right;
+      const chartHeight = height - padding.top - padding.bottom;
+      const maxValue = Math.max(...values, 1);
+      const canvasBg = getThemeValue("--canvas-bg");
+      const lineColor = getThemeValue("--line");
+      const mutedColor = getThemeValue("--muted");
+      const textColor = getThemeValue("--text");
+      const accentColor = getThemeValue("--primary");
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = canvasBg;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padding.left, padding.top + chartHeight);
+      ctx.lineTo(width - padding.right, padding.top + chartHeight);
+      ctx.stroke();
+
+      values.forEach((value, index) => {
+        const x = padding.left + (chartWidth / values.length) * index + chartWidth / values.length / 2;
+        const y = padding.top + chartHeight - (value / maxValue) * (chartHeight - 12);
+
+        if (index === 0) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+
+      ctx.strokeStyle = accentColor;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      values.forEach((value, index) => {
+        const x = padding.left + (chartWidth / values.length) * index + chartWidth / values.length / 2;
+        const y = padding.top + chartHeight - (value / maxValue) * (chartHeight - 12);
+
+        ctx.fillStyle = accentColor;
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = mutedColor;
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(labels[index], x, height - 16);
+
+        ctx.fillStyle = textColor;
+        ctx.font = "10px sans-serif";
+        ctx.fillText(value > 0 ? `${(value / 1000000).toFixed(1)}M` : "0", x, y - 8);
+      });
+    }
+
+    function renderDetail(stock) {
+      currentSelectedCode = stock.code;
+      detailPanelEl.hidden = false;
+      document.body.style.overflow = "hidden";
+      detailTitleEl.textContent = `${stock.code} ${stock.name}`;
+      detailDescEl.textContent = "你可以切換收盤價估算與成交均價估算，兩者都屬於推估值，適合拿來比較趨勢。";
+      detailMetaEl.innerHTML = `
+        <div class="meta-chip">最長連買 ${stock.bestStreak} 天</div>
+        <div class="meta-chip">最新收盤 ${stock.closePrice.toLocaleString()}</div>
+        <div class="meta-chip">最新成交金額 ${stock.latestAmount.toLocaleString()}</div>
+      `;
+      updateModeButtons();
+
+      detailBodyEl.innerHTML = stock.detail
+        .map((item) => {
+          const shareClass = item.netShares > 0 ? "buy" : item.netShares < 0 ? "sell" : "";
+          const estimatedCost =
+            selectedCostMode === "close" ? item.estimatedCostByClose : item.estimatedCostByAverage;
+          return `
+            <tr>
+              <td class="mono" data-label="日期">${formatDisplayDate(item.date)}</td>
+              <td class="mono ${shareClass}" data-label="外資買賣超股數">${item.netShares.toLocaleString()}</td>
+              <td class="mono ${shareClass}" data-label="外資買賣超張數">${item.netLots.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+              <td class="mono" data-label="收盤價">${item.closePrice.toLocaleString()}</td>
+              <td class="mono" data-label="成交均價">${item.averagePrice ? item.averagePrice.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "-"}</td>
+              <td class="mono buy" data-label="估算買超成本">${estimatedCost > 0 ? formatCurrency(estimatedCost) : "-"}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      const labels = stock.detail.map((item) => item.date.slice(4, 8));
+      const lotValues = stock.detail.map((item) => item.netLots);
+      const costValues = stock.detail.map((item) =>
+        selectedCostMode === "close" ? item.estimatedCostByClose : item.estimatedCostByAverage
+      );
+
+      drawBarChart(
+        lotsChartEl,
+        lotValues,
+        labels,
+        "#0c7c59",
+        "#cf3f3f",
+        (value) => value.toLocaleString(undefined, { maximumFractionDigits: 1 })
+      );
+      drawCostChart(costChartEl, costValues, labels);
+    }
+
+    async function run() {
+      loadBtn.disabled = true;
+      resultBodyEl.innerHTML = "";
+      emptyStateEl.style.display = "block";
+      emptyStateEl.textContent = "查詢中...";
+
+      try {
+        const endDate = endDateInput.value;
+        const minStreak = getMinStreak();
+        if (!endDate) {
+          throw new Error("請先選擇查詢截止日。");
+        }
+        resultTitleEl.textContent = `外資連續買超至少 ${minStreak} 天`;
+
+        const rawDays = await getRecentTradingDays(endDate, DAY_COUNT);
+        const normalizedDays = normalizeDailyRows(rawDays);
+        const latestTradingDate = normalizedDays[normalizedDays.length - 1].date;
+        const priceVolumePayload = await fetchPriceVolumeData(latestTradingDate);
+        const latestPriceVolumeMap = buildPriceVolumeMap(priceVolumePayload);
+        const dailyPriceVolumeMaps = await buildDailyPriceVolumeMaps(normalizedDays);
+        const stocks = analyzeStocks(normalizedDays, latestPriceVolumeMap, dailyPriceVolumeMaps, minStreak);
+        stocksCache = stocks;
+        publishAnalysisContext({
+          normalizedDays,
+          latestTradingDate,
+          latestPriceVolumeMap,
+          dailyPriceVolumeMaps,
+          stocks,
+          minStreak
+        });
+
+        renderDateChips(normalizedDays);
+        renderResults(stocks);
+        closeDetailModal();
+
+        stockCountEl.textContent = stocks.length.toLocaleString();
+        latestDateEl.textContent = formatDisplayDate(normalizedDays[normalizedDays.length - 1].date);
+        usedDaysEl.textContent = normalizedDays.length.toString();
+        setStatus(`查詢完成，共找到 ${stocks.length} 檔符合外資連續買超至少 ${minStreak} 天的股票。`);
+      } catch (error) {
+        stockCountEl.textContent = "0";
+        latestDateEl.textContent = "-";
+        usedDaysEl.textContent = "0";
+        dateChipsEl.innerHTML = "";
+        resultBodyEl.innerHTML = "";
+        detailBodyEl.innerHTML = "";
+        detailMetaEl.innerHTML = "";
+        closeDetailModal();
+        stocksCache = [];
+        currentSelectedCode = null;
+        publishAnalysisContext(null);
+        emptyStateEl.textContent = "本次查詢失敗，請稍後再試。";
+        emptyStateEl.style.display = "block";
+        setStatus(error.message || "發生未預期錯誤。", true);
+      } finally {
+        loadBtn.disabled = false;
+      }
+    }
+
+    const today = new Date();
+    endDateInput.value = formatDateForInput(today);
+    minStreakInput.value = String(DEFAULT_MIN_STREAK);
+    resultTitleEl.textContent = `外資連續買超至少 ${DEFAULT_MIN_STREAK} 天`;
+    tabButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        setActiveTab(button.dataset.tab);
+      });
+    });
+    loadBtn.addEventListener("click", run);
+    closeModeBtn.addEventListener("click", () => {
+      selectedCostMode = "close";
+      const stock = stocksCache.find((item) => item.code === currentSelectedCode);
+      if (stock) {
+        renderDetail(stock);
+      } else {
+        updateModeButtons();
+      }
+    });
+    avgModeBtn.addEventListener("click", () => {
+      selectedCostMode = "average";
+      const stock = stocksCache.find((item) => item.code === currentSelectedCode);
+      if (stock) {
+        renderDetail(stock);
+      } else {
+        updateModeButtons();
+      }
+    });
+    detailCloseBtn.addEventListener("click", closeDetailModal);
+    detailPanelEl.addEventListener("click", (event) => {
+      if (event.target === detailPanelEl) {
+        closeDetailModal();
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !detailPanelEl.hidden) {
+        closeDetailModal();
+      }
+    });
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+      const stock = stocksCache.find((item) => item.code === currentSelectedCode);
+      if (stock) {
+        renderDetail(stock);
+      }
+    });
+    run();
+  </script>
+  <script type="module">
+    import { TDCC_SNAPSHOT_DATE, TDCC_SNAPSHOT_MAP } from "./tdcc_snapshot.js";
+
+    const runSmartMoneyBtn = document.getElementById("runSmartMoneyBtn");
+    const smartMoneyStatusEl = document.getElementById("smartMoneyStatus");
+    const smartMoneyCandidatesBody = document.getElementById("smartMoneyCandidatesBody");
+    const chipCheckBody = document.getElementById("chipCheckBody");
+    const smartMoneyReportBody = document.getElementById("smartMoneyReportBody");
+
+    const LOOKBACK_DAYS = 5;
+
+    function formatSnapshotDate(dateString) {
+      if (!dateString || dateString.length !== 8) {
+        return "-";
+      }
+      return `${dateString.slice(0, 4)}/${dateString.slice(4, 6)}/${dateString.slice(6, 8)}`;
+    }
+
+    function formatPercent(value) {
+      if (typeof value !== "number" || Number.isNaN(value)) {
+        return "-";
+      }
+      return `${value.toFixed(2)}%`;
+    }
+
+    function formatNumber(value, digits = 0) {
+      if (typeof value !== "number" || Number.isNaN(value)) {
+        return "-";
+      }
+      return value.toLocaleString(undefined, {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits
+      });
+    }
+
+    function findBestPositiveStreak(detailRows) {
+      let bestStart = -1;
+      let bestEnd = -1;
+      let bestLength = 0;
+      let currentStart = -1;
+      let currentLength = 0;
+
+      detailRows.forEach((row, index) => {
+        if (row.netShares > 0) {
+          if (currentLength === 0) {
+            currentStart = index;
+          }
+          currentLength += 1;
+          if (currentLength > bestLength) {
+            bestLength = currentLength;
+            bestStart = currentStart;
+            bestEnd = index;
+          }
+        } else {
+          currentStart = -1;
+          currentLength = 0;
+        }
+      });
+
+      return {
+        bestLength,
+        rows:
+          bestStart === -1
+            ? []
+            : detailRows.slice(bestStart, bestEnd + 1)
+      };
+    }
+
+    function buildInstitutionCandidates(context) {
+      if (!context?.stocks?.length) {
+        return [];
+      }
+
+      return context.stocks
+        .map((stock) => {
+          const recentDetail = stock.detail.slice(-LOOKBACK_DAYS);
+          const streak = findBestPositiveStreak(recentDetail);
+          if (streak.bestLength < context.minStreak || streak.rows.length === 0) {
+            return null;
+          }
+
+          const volumeIncreasing = streak.rows.every((row, index) =>
+            index === 0 ? true : row.netShares > streak.rows[index - 1].netShares
+          );
+          if (!volumeIncreasing) {
+            return null;
+          }
+
+          const totalBuyShares = streak.rows.reduce((sum, row) => sum + row.netShares, 0);
+          if (totalBuyShares <= 0) {
+            return null;
+          }
+
+          const weightedCost =
+            streak.rows.reduce((sum, row) => sum + row.averagePrice * row.netShares, 0) / totalBuyShares;
+          const priceGapPct = ((stock.closePrice / weightedCost) - 1) * 100;
+          const costBoundaryPassed = stock.closePrice <= weightedCost * 1.05;
+          if (!costBoundaryPassed) {
+            return null;
+          }
+
+          return {
+            code: stock.code,
+            name: stock.name,
+            streakDays: streak.bestLength,
+            avgCost: weightedCost,
+            nowPrice: stock.closePrice,
+            priceGapPct,
+            breakoutRisk: stock.closePrice > weightedCost * 1.08
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => {
+          if (a.priceGapPct !== b.priceGapPct) {
+            return a.priceGapPct - b.priceGapPct;
+          }
+          return b.streakDays - a.streakDays;
+        });
+    }
+
+    function buildChipChecks(candidates) {
+      return candidates.map((candidate) => {
+        const chip = TDCC_SNAPSHOT_MAP[candidate.code];
+        if (!chip) {
+          return {
+            code: candidate.code,
+            holderCount: null,
+            avgLotsPerHolder: null,
+            ratio400Up: null,
+            ratio1000Up: null,
+            passes: false,
+            note: "查無 TDCC 快照"
+          };
+        }
+
+        const passes = chip.ratio400Up >= 50 || chip.ratio1000Up >= 30;
+        const note = passes ? "大戶集中度達標" : "大戶集中度未達標";
+
+        return {
+          code: candidate.code,
+          holderCount: chip.holderCount,
+          avgLotsPerHolder: chip.avgLotsPerHolder,
+          ratio400Up: chip.ratio400Up,
+          ratio1000Up: chip.ratio1000Up,
+          passes,
+          note
+        };
+      });
+    }
+
+    function buildFinalReport(candidates, chipChecks) {
+      const chipMap = new Map(chipChecks.map((row) => [row.code, row]));
+      return candidates
+        .map((candidate) => {
+          const chip = chipMap.get(candidate.code);
+          const notes = ["TDCC 單週快照"];
+          if (chip?.note) {
+            notes.push(chip.note);
+          }
+          if (candidate.breakoutRisk) {
+            notes.push("潛在追高風險");
+          }
+
+          return {
+            code: candidate.code,
+            name: candidate.name,
+            priceGapPct: candidate.priceGapPct,
+            chipPass: Boolean(chip?.passes),
+            breakoutRisk: candidate.breakoutRisk,
+            note: notes.join("；")
+          };
+        })
+        .filter((row) => row.chipPass)
+        .sort((a, b) => {
+          if (a.breakoutRisk !== b.breakoutRisk) {
+            return Number(a.breakoutRisk) - Number(b.breakoutRisk);
+          }
+          return a.priceGapPct - b.priceGapPct;
+        });
+    }
+
+    function renderRows(target, rows, columns) {
+      if (!rows.length) {
+        target.innerHTML = `<tr><td colspan="${columns.length}" class="mono">無符合資料</td></tr>`;
+        return;
+      }
+
+      target.innerHTML = rows.map((row) => `
+        <tr>
+          ${columns.map((column) => `<td data-label="${column}">${row[column] ?? "-"}</td>`).join("")}
+        </tr>
+      `).join("");
+    }
+
+    function runPublicStrategy() {
+      const context = window.foreignPageContext;
+      if (!context?.stocks?.length) {
+        smartMoneyStatusEl.textContent = "上方 TWSE 資料尚未準備好，請先完成查詢。";
+        renderRows(smartMoneyCandidatesBody, [], ["股票代號", "股票名稱", "連買天數", "加權平均成本", "價差百分比"]);
+        renderRows(chipCheckBody, [], ["股票代號", "最新戶數", "戶均張數", "400 張以上持股比", "千張以上持股比", "快照判定"]);
+        renderRows(smartMoneyReportBody, [], ["股票代號", "股票名稱", "價差百分比", "籌碼集中", "追價風險", "資料註記"]);
+        return;
+      }
+
+      smartMoneyStatusEl.textContent = "正在用實際 TWSE 與 TDCC 資料計算...";
+      const candidates = buildInstitutionCandidates(context);
+      const chipChecks = buildChipChecks(candidates);
+      const report = buildFinalReport(candidates, chipChecks);
+
+      renderRows(
+        smartMoneyCandidatesBody,
+        candidates.map((row) => ({
+          股票代號: `<span class="mono">${row.code}</span>`,
+          股票名稱: row.name,
+          連買天數: `<span class="mono buy">${row.streakDays}</span>`,
+          加權平均成本: `<span class="mono">${formatNumber(row.avgCost, 2)}</span>`,
+          價差百分比: `<span class="mono ${row.priceGapPct <= 5 ? "buy" : "sell"}">${formatPercent(row.priceGapPct)}</span>`
+        })),
+        ["股票代號", "股票名稱", "連買天數", "加權平均成本", "價差百分比"]
+      );
+
+      renderRows(
+        chipCheckBody,
+        chipChecks.map((row) => ({
+          股票代號: `<span class="mono">${row.code}</span>`,
+          最新戶數: `<span class="mono">${formatNumber(row.holderCount)}</span>`,
+          戶均張數: `<span class="mono">${formatNumber(row.avgLotsPerHolder, 2)}</span>`,
+          "400 張以上持股比": `<span class="mono">${formatPercent(row.ratio400Up)}</span>`,
+          千張以上持股比: `<span class="mono">${formatPercent(row.ratio1000Up)}</span>`,
+          快照判定: row.passes ? "通過" : row.note
+        })),
+        ["股票代號", "最新戶數", "戶均張數", "400 張以上持股比", "千張以上持股比", "快照判定"]
+      );
+
+      renderRows(
+        smartMoneyReportBody,
+        report.map((row) => ({
+          股票代號: `<span class="mono">${row.code}</span>`,
+          股票名稱: row.name,
+          價差百分比: `<span class="mono">${formatPercent(row.priceGapPct)}</span>`,
+          籌碼集中: row.chipPass ? "通過" : "未通過",
+          追價風險: row.breakoutRisk ? "是" : "否",
+          資料註記: row.note
+        })),
+        ["股票代號", "股票名稱", "價差百分比", "籌碼集中", "追價風險", "資料註記"]
+      );
+
+      smartMoneyStatusEl.textContent =
+        `已完成公開資料策略：法人候選 ${candidates.length} 檔，最終結果 ${report.length} 檔。TDCC 快照日為 ${formatSnapshotDate(TDCC_SNAPSHOT_DATE)}。`;
+    }
+
+    runSmartMoneyBtn.addEventListener("click", runPublicStrategy);
+    window.addEventListener("foreign-data-updated", runPublicStrategy);
+    runPublicStrategy();
+  </script>
+</body>
+</html>
