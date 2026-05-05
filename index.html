@@ -176,6 +176,59 @@
       line-height: 1.6;
     }
 
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .loader {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid color-mix(in srgb, var(--primary) 20%, transparent);
+      border-top-color: var(--primary);
+      animation: spin 0.9s linear infinite;
+      display: none;
+      flex: 0 0 auto;
+    }
+
+    .loader.active {
+      display: inline-block;
+    }
+
+    .progress-wrap {
+      margin-top: 10px;
+      display: none;
+    }
+
+    .progress-wrap.active {
+      display: block;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--line) 70%, transparent);
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 55%, white));
+      transition: width 0.25s ease;
+    }
+
+    .progress-text {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
     .status.error {
       background: #fff0f0;
       border-color: #f2cccc;
@@ -533,6 +586,15 @@
       display: block;
     }
 
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
     @media (max-width: 720px) {
       .container {
         padding: 20px 14px 40px;
@@ -681,13 +743,28 @@
       </div>
       <div class="field">
         <label for="minStreak">連續買超至少幾天</label>
-        <input id="minStreak" type="number" min="1" max="7" step="1" value="3" />
+        <input id="minStreak" type="number" min="1" max="15" step="1" value="5" />
+      </div>
+      <div class="field">
+        <label for="dayCount">使用交易天數</label>
+        <input id="dayCount" type="number" min="3" max="15" step="1" value="5" />
       </div>
       <button id="loadBtn">開始查詢</button>
-      <p class="hint">系統會從你輸入的日期往前回推，直到找到最近 7 個有資料的台股交易日。</p>
+      <p class="hint">系統會從你輸入的日期往前回推，直到找到指定數量且有資料的台股交易日。</p>
     </section>
 
-    <div id="status" class="status">準備就緒，請按下「開始查詢」。</div>
+    <div id="status" class="status">
+      <div class="status-row">
+        <span id="statusLoader" class="loader" aria-hidden="true"></span>
+        <span id="statusText">準備就緒，請按下「開始查詢」。</span>
+      </div>
+      <div id="progressWrap" class="progress-wrap" aria-live="polite">
+        <div class="progress-bar">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+        <div id="progressText" class="progress-text">尚未開始查詢。</div>
+      </div>
+    </div>
 
     <section class="summary-grid">
       <div class="stat-card">
@@ -713,7 +790,7 @@
     <section id="tab-foreign" class="tab-panel">
       <section class="panel">
         <div class="panel-header">
-          <h2>最近 7 個有效交易日</h2>
+          <h2 id="daysTitle">最近 5 個有效交易日</h2>
           <p>只有實際有資料的交易日才會列入統計，週末與休市日會自動跳過。</p>
         </div>
         <div id="dateChips" class="dates"></div>
@@ -721,7 +798,7 @@
 
       <section class="panel">
         <div class="panel-header">
-          <h2 id="resultTitle">外資連續買超至少 3 天</h2>
+          <h2 id="resultTitle">外資連續買超至少 5 天</h2>
           <p>表格依最近有效交易日的價量排名，由高到低排序。這裡的價量採用成交金額作為排序依據。</p>
         </div>
         <div class="table-wrap">
@@ -733,13 +810,13 @@
                 <th>股票名稱</th>
                 <th>最新收盤價</th>
                 <th>最新成交股數</th>
-                <th>最新成交金額</th>
-                <th>最長連買天數</th>
-                <th>連買區間</th>
-                <th>7 日合計</th>
-                <th>每日外資買賣超</th>
-              </tr>
-            </thead>
+              <th>最新成交金額</th>
+              <th>最長連買天數</th>
+              <th>連買區間</th>
+              <th id="totalNetTitle">5 日合計</th>
+              <th>每日外資買賣超</th>
+            </tr>
+          </thead>
             <tbody id="resultBody"></tbody>
           </table>
         </div>
@@ -749,7 +826,7 @@
             <div class="detail-head">
               <div>
                 <h3 id="detailTitle">股票詳細資料</h3>
-                <p id="detailDesc">點擊上方任一檔股票後，這裡會顯示最近 7 個交易日的外資買賣超張數與估算成本。</p>
+                <p id="detailDesc">點擊上方任一檔股票後，這裡會顯示本次查詢交易日的外資買賣超張數與估算成本。</p>
               </div>
               <div id="detailMeta" class="detail-meta"></div>
               <button id="detailCloseBtn" class="detail-close" type="button">關閉</button>
@@ -797,7 +874,7 @@
       <section class="panel">
         <div class="panel-header">
           <h2>公開資料策略</h2>
-          <p>這一區改用實際公開資料：近 5 個交易日的 TWSE 三大法人買賣超，加上本機 TDCC 集保快照，做出可直接參考的近似版篩選。</p>
+          <p id="strategyIntro">這一區改用實際公開資料：最近查詢交易日的 TWSE 三大法人買賣超，加上本機 TDCC 集保快照，做出可直接參考的近似版篩選。</p>
         </div>
         <div class="smart-toolbar">
           <button id="runSmartMoneyBtn" class="subtle-button" type="button">執行公開資料策略</button>
@@ -806,7 +883,7 @@
         <div class="smart-layout">
           <div class="smart-card">
             <h4>法人候選</h4>
-            <p>條件為近 5 個交易日中，外資連買至少達你設定的天數、買超量遞增，且最新收盤未高於近 5 日估算成本 5%。</p>
+            <p id="strategyDesc">條件為最近查詢交易日中，外資連買至少達你設定的天數、買超量遞增，且最新收盤未高於該區間估算成本 5%。</p>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -882,17 +959,26 @@
   <script>
     const FUND_API_URL = "https://www.twse.com.tw/rwd/zh/fund/T86";
     const PRICE_VOLUME_API_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL";
-    const DAY_COUNT = 7;
-    const DEFAULT_MIN_STREAK = 3;
+    const DEFAULT_DAY_COUNT = 5;
+    const DEFAULT_MIN_STREAK = 5;
+    const MAX_DAY_COUNT = 15;
 
     const statusEl = document.getElementById("status");
+    const statusTextEl = document.getElementById("statusText");
+    const statusLoaderEl = document.getElementById("statusLoader");
+    const progressWrapEl = document.getElementById("progressWrap");
+    const progressFillEl = document.getElementById("progressFill");
+    const progressTextEl = document.getElementById("progressText");
     const loadBtn = document.getElementById("loadBtn");
     const endDateInput = document.getElementById("endDate");
     const minStreakInput = document.getElementById("minStreak");
+    const dayCountInput = document.getElementById("dayCount");
     const stockCountEl = document.getElementById("stockCount");
     const latestDateEl = document.getElementById("latestDate");
     const usedDaysEl = document.getElementById("usedDays");
     const dateChipsEl = document.getElementById("dateChips");
+    const daysTitleEl = document.getElementById("daysTitle");
+    const totalNetTitleEl = document.getElementById("totalNetTitle");
     const resultBodyEl = document.getElementById("resultBody");
     const resultTitleEl = document.getElementById("resultTitle");
     const emptyStateEl = document.getElementById("emptyState");
@@ -907,6 +993,8 @@
     const closeModeBtn = document.getElementById("closeModeBtn");
     const avgModeBtn = document.getElementById("avgModeBtn");
     const costChartDescEl = document.getElementById("costChartDesc");
+    const strategyIntroEl = document.getElementById("strategyIntro");
+    const strategyDescEl = document.getElementById("strategyDesc");
     const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
     const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
 
@@ -920,8 +1008,15 @@
     }
 
     function setStatus(message, isError = false) {
-      statusEl.textContent = message;
+      statusTextEl.textContent = message;
       statusEl.classList.toggle("error", isError);
+    }
+
+    function setLoadingState(isLoading, progressRatio = 0, progressMessage = "") {
+      statusLoaderEl.classList.toggle("active", isLoading);
+      progressWrapEl.classList.toggle("active", isLoading);
+      progressFillEl.style.width = `${Math.max(0, Math.min(progressRatio, 1)) * 100}%`;
+      progressTextEl.textContent = progressMessage || (isLoading ? "資料讀取中..." : "尚未開始查詢。");
     }
 
     function formatDateForApi(date) {
@@ -970,12 +1065,20 @@
       });
     }
 
+    function getDayCount() {
+      const value = Number(dayCountInput.value);
+      if (!Number.isInteger(value) || value < 3) {
+        return DEFAULT_DAY_COUNT;
+      }
+      return Math.min(value, MAX_DAY_COUNT);
+    }
+
     function getMinStreak() {
       const value = Number(minStreakInput.value);
       if (!Number.isInteger(value) || value < 1) {
         return DEFAULT_MIN_STREAK;
       }
-      return Math.min(value, DAY_COUNT);
+      return Math.min(value, getDayCount());
     }
 
     async function fetchDailyData(dateString) {
@@ -1027,10 +1130,20 @@
       while (collected.length < dayCount && attempts < maxAttempts) {
         const apiDate = formatDateForApi(cursor);
         setStatus(`正在查詢 ${apiDate}，已找到 ${collected.length}/${dayCount} 個有效交易日...`);
+        setLoadingState(
+          true,
+          collected.length / dayCount,
+          `資料讀取中：已找到 ${collected.length} / ${dayCount} 個有效交易日，正在查詢 ${apiDate}`
+        );
 
         const payload = await fetchDailyData(apiDate);
         if (payload.stat === "OK" && Array.isArray(payload.data) && payload.data.length > 0) {
           collected.push(payload);
+          setLoadingState(
+            true,
+            collected.length / dayCount,
+            `資料讀取中：已找到 ${collected.length} / ${dayCount} 個有效交易日`
+          );
         }
 
         cursor = previousDate(cursor);
@@ -1204,9 +1317,10 @@
     }
 
     function renderResults(stocks) {
+      const dayCount = getDayCount();
       if (stocks.length === 0) {
         resultBodyEl.innerHTML = "";
-        emptyStateEl.textContent = `最近 7 個交易日內，沒有股票符合外資連續買超至少 ${getMinStreak()} 天。`;
+        emptyStateEl.textContent = `最近 ${dayCount} 個交易日內，沒有股票符合外資連續買超至少 ${getMinStreak()} 天。`;
         emptyStateEl.style.display = "block";
         detailPanelEl.hidden = true;
         return;
@@ -1233,7 +1347,7 @@
               <td class="mono" data-label="最新成交金額">${stock.latestAmount.toLocaleString()}</td>
               <td class="mono buy" data-label="最長連買天數">${stock.bestStreak}</td>
               <td class="mono" data-label="連買區間">${stock.streakRange}</td>
-              <td class="mono ${totalClass}" data-label="7 日合計">${stock.totalNet.toLocaleString()}</td>
+              <td class="mono ${totalClass}" data-label="${getDayCount()} 日合計">${stock.totalNet.toLocaleString()}</td>
               <td data-label="每日外資買賣超">${dailyCells}</td>
             </tr>
           `;
@@ -1428,16 +1542,22 @@
       resultBodyEl.innerHTML = "";
       emptyStateEl.style.display = "block";
       emptyStateEl.textContent = "查詢中...";
+      setLoadingState(true, 0, "資料讀取中：準備開始查詢...");
 
       try {
         const endDate = endDateInput.value;
+        const dayCount = getDayCount();
         const minStreak = getMinStreak();
         if (!endDate) {
           throw new Error("請先選擇查詢截止日。");
         }
+        daysTitleEl.textContent = `最近 ${dayCount} 個有效交易日`;
+        totalNetTitleEl.textContent = `${dayCount} 日合計`;
         resultTitleEl.textContent = `外資連續買超至少 ${minStreak} 天`;
+        strategyIntroEl.textContent = `這一區改用實際公開資料：最近 ${dayCount} 個交易日的 TWSE 三大法人買賣超，加上本機 TDCC 集保快照，做出可直接參考的近似版篩選。`;
+        strategyDescEl.textContent = `條件為最近 ${dayCount} 個交易日中，外資連買至少達你設定的天數、買超量遞增，且最新收盤未高於該區間估算成本 5%。`;
 
-        const rawDays = await getRecentTradingDays(endDate, DAY_COUNT);
+        const rawDays = await getRecentTradingDays(endDate, dayCount);
         const normalizedDays = normalizeDailyRows(rawDays);
         const latestTradingDate = normalizedDays[normalizedDays.length - 1].date;
         const priceVolumePayload = await fetchPriceVolumeData(latestTradingDate);
@@ -1451,7 +1571,8 @@
           latestPriceVolumeMap,
           dailyPriceVolumeMaps,
           stocks,
-          minStreak
+          minStreak,
+          dayCount
         });
 
         renderDateChips(normalizedDays);
@@ -1461,7 +1582,8 @@
         stockCountEl.textContent = stocks.length.toLocaleString();
         latestDateEl.textContent = formatDisplayDate(normalizedDays[normalizedDays.length - 1].date);
         usedDaysEl.textContent = normalizedDays.length.toString();
-        setStatus(`查詢完成，共找到 ${stocks.length} 檔符合外資連續買超至少 ${minStreak} 天的股票。`);
+        setStatus(`查詢完成，共找到 ${stocks.length} 檔符合最近 ${dayCount} 個交易日中外資連續買超至少 ${minStreak} 天的股票。`);
+        setLoadingState(false, 1, "查詢完成。");
       } catch (error) {
         stockCountEl.textContent = "0";
         latestDateEl.textContent = "-";
@@ -1477,6 +1599,7 @@
         emptyStateEl.textContent = "本次查詢失敗，請稍後再試。";
         emptyStateEl.style.display = "block";
         setStatus(error.message || "發生未預期錯誤。", true);
+        setLoadingState(false, 0, "查詢失敗。");
       } finally {
         loadBtn.disabled = false;
       }
@@ -1484,8 +1607,14 @@
 
     const today = new Date();
     endDateInput.value = formatDateForInput(today);
+    dayCountInput.value = String(DEFAULT_DAY_COUNT);
     minStreakInput.value = String(DEFAULT_MIN_STREAK);
+    daysTitleEl.textContent = `最近 ${DEFAULT_DAY_COUNT} 個有效交易日`;
+    totalNetTitleEl.textContent = `${DEFAULT_DAY_COUNT} 日合計`;
     resultTitleEl.textContent = `外資連續買超至少 ${DEFAULT_MIN_STREAK} 天`;
+    strategyIntroEl.textContent = `這一區改用實際公開資料：最近 ${DEFAULT_DAY_COUNT} 個交易日的 TWSE 三大法人買賣超，加上本機 TDCC 集保快照，做出可直接參考的近似版篩選。`;
+    strategyDescEl.textContent = `條件為最近 ${DEFAULT_DAY_COUNT} 個交易日中，外資連買至少達你設定的天數、買超量遞增，且最新收盤未高於該區間估算成本 5%。`;
+    setLoadingState(false, 0, "尚未開始查詢。");
     tabButtons.forEach((button) => {
       button.addEventListener("click", () => {
         setActiveTab(button.dataset.tab);
@@ -1527,7 +1656,6 @@
         renderDetail(stock);
       }
     });
-    run();
   </script>
   <script type="module">
     import { TDCC_SNAPSHOT_DATE, TDCC_SNAPSHOT_MAP } from "./tdcc_snapshot.js";
@@ -1537,8 +1665,6 @@
     const smartMoneyCandidatesBody = document.getElementById("smartMoneyCandidatesBody");
     const chipCheckBody = document.getElementById("chipCheckBody");
     const smartMoneyReportBody = document.getElementById("smartMoneyReportBody");
-
-    const LOOKBACK_DAYS = 5;
 
     function formatSnapshotDate(dateString) {
       if (!dateString || dateString.length !== 8) {
@@ -1604,7 +1730,7 @@
 
       return context.stocks
         .map((stock) => {
-          const recentDetail = stock.detail.slice(-LOOKBACK_DAYS);
+          const recentDetail = stock.detail.slice(-context.dayCount);
           const streak = findBestPositiveStreak(recentDetail);
           if (streak.bestLength < context.minStreak || streak.rows.length === 0) {
             return null;
