@@ -949,6 +949,7 @@
     <p class="footer-note">
       資料來源：台灣證券交易所 `T86`、`STOCK_DAY_ALL` API，以及本機 TDCC 集保快照。程式採用 `yyyyMMdd` 查詢格式，並以「外陸資買賣超股數(不含外資自營商)」作為外資買賣超判斷依據。
     </p>
+    <p class="footer-note">程式更新日期：2026/07/20</p>
     <div class="info-note">
       <strong>TDCC 快照說明：</strong>
       本頁實際使用的是 `tdcc_snapshot.js`。它是由 TDCC 官方開放資料原始檔 `tdcc_shareholding_latest.csv`
@@ -1047,6 +1048,97 @@
       return Number(String(value).replaceAll(",", "").trim()) || 0;
     }
 
+    function normalizeCell(value) {
+      const trimmed = String(value ?? "").trim();
+      if (trimmed.startsWith('="') && trimmed.endsWith('"')) {
+        return trimmed.slice(2, -1);
+      }
+      if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+        return trimmed.slice(1, -1);
+      }
+      return trimmed;
+    }
+
+    function splitCsvLine(line) {
+      const result = [];
+      let current = "";
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i += 1) {
+        const char = line[i];
+        const next = line[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && next === '"') {
+            current += '"';
+            i += 1;
+          } else {
+            inQuotes = !inQuotes;
+          }
+          continue;
+        }
+
+        if (char === "," && !inQuotes) {
+          result.push(normalizeCell(current));
+          current = "";
+          continue;
+        }
+
+        current += char;
+      }
+
+      result.push(normalizeCell(current));
+      return result;
+    }
+
+    function parseTwseCsvPayload(text, requiredFields) {
+      const lines = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      const headerIndex = lines.findIndex((line) => {
+        const columns = splitCsvLine(line);
+        return requiredFields.every((field) => columns.includes(field));
+      });
+
+      if (headerIndex === -1) {
+        throw new Error("TWSE 回傳格式無法辨識。");
+      }
+
+      const fields = splitCsvLine(lines[headerIndex]);
+      const data = [];
+
+      for (const line of lines.slice(headerIndex + 1)) {
+        const row = splitCsvLine(line);
+        if (!row.length || row.every((cell) => cell === "")) {
+          continue;
+        }
+        if (row.length < fields.length) {
+          continue;
+        }
+        if (row[0].includes("說明") || row[0].includes("備註")) {
+          continue;
+        }
+        data.push(row.slice(0, fields.length));
+      }
+
+      return { stat: "OK", fields, data };
+    }
+
+    async function parseTwsePayload(response, requiredFields) {
+      if (!response.ok) {
+        throw new Error(`API 回應失敗：HTTP ${response.status}`);
+      }
+
+      const text = await response.text();
+      try {
+        return JSON.parse(text);
+      } catch (jsonError) {
+        return parseTwseCsvPayload(text, requiredFields);
+      }
+    }
+
     function getThemeValue(name) {
       return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     }
@@ -1089,11 +1181,11 @@
       });
 
       const response = await fetch(`${FUND_API_URL}?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error(`API 回應失敗：HTTP ${response.status}`);
-      }
-
-      return response.json();
+      return parseTwsePayload(response, [
+        "證券代號",
+        "證券名稱",
+        "外陸資買賣超股數(不含外資自營商)"
+      ]);
     }
 
     async function fetchPriceVolumeData(dateString) {
@@ -1103,11 +1195,12 @@
       });
 
       const response = await fetch(`${PRICE_VOLUME_API_URL}?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error(`價量 API 回應失敗：HTTP ${response.status}`);
-      }
-
-      return response.json();
+      return parseTwsePayload(response, [
+        "證券代號",
+        "成交股數",
+        "成交金額",
+        "收盤價"
+      ]);
     }
 
     async function buildDailyPriceVolumeMaps(days) {
@@ -1159,17 +1252,19 @@
 
     function normalizeDailyRows(days) {
       return days.map((day) => {
+        const codeIndex = day.fields.findIndex((field) => field === "證券代號");
+        const nameIndex = day.fields.findIndex((field) => field === "證券名稱");
         const foreignNetIndex = day.fields.findIndex(
           (field) => field === "外陸資買賣超股數(不含外資自營商)"
         );
 
-        if (foreignNetIndex === -1) {
+        if (codeIndex === -1 || nameIndex === -1 || foreignNetIndex === -1) {
           throw new Error("找不到外資買賣超欄位，API 格式可能已變更。");
         }
 
         const rows = day.data.map((row) => ({
-          code: row[0].trim(),
-          name: row[1].trim(),
+          code: normalizeCell(row[codeIndex]),
+          name: normalizeCell(row[nameIndex]),
           foreignNet: parseNumber(row[foreignNetIndex])
         }));
 
@@ -1186,18 +1281,19 @@
       }
 
       const fieldIndex = {
+        code: payload.fields.findIndex((field) => field === "證券代號"),
         volume: payload.fields.findIndex((field) => field === "成交股數"),
         amount: payload.fields.findIndex((field) => field === "成交金額"),
         close: payload.fields.findIndex((field) => field === "收盤價")
       };
 
-      if (fieldIndex.volume === -1 || fieldIndex.amount === -1 || fieldIndex.close === -1) {
+      if (fieldIndex.code === -1 || fieldIndex.volume === -1 || fieldIndex.amount === -1 || fieldIndex.close === -1) {
         throw new Error("價量 API 欄位格式可能已變更。");
       }
 
       return new Map(
         payload.data.map((row) => [
-          row[0].trim(),
+          normalizeCell(row[fieldIndex.code]),
           {
             close: parseNumber(row[fieldIndex.close]),
             volume: parseNumber(row[fieldIndex.volume]),
@@ -1658,13 +1754,13 @@
     });
   </script>
   <script type="module">
-    import { TDCC_SNAPSHOT_DATE, TDCC_SNAPSHOT_MAP } from "./tdcc_snapshot.js";
-
     const runSmartMoneyBtn = document.getElementById("runSmartMoneyBtn");
     const smartMoneyStatusEl = document.getElementById("smartMoneyStatus");
     const smartMoneyCandidatesBody = document.getElementById("smartMoneyCandidatesBody");
     const chipCheckBody = document.getElementById("chipCheckBody");
     const smartMoneyReportBody = document.getElementById("smartMoneyReportBody");
+    let tdccSnapshotDate = "";
+    let tdccSnapshotMap = {};
 
     function formatSnapshotDate(dateString) {
       if (!dateString || dateString.length !== 8) {
@@ -1688,6 +1784,96 @@
         minimumFractionDigits: digits,
         maximumFractionDigits: digits
       });
+    }
+
+    function summarizeTdccRows(rowsByCode) {
+      const summary = {};
+      let snapshotDate = "";
+
+      Object.entries(rowsByCode).forEach(([code, rows]) => {
+        rows.sort((a, b) => a.level - b.level);
+        snapshotDate = snapshotDate || rows[0]?.date || "";
+        const total = rows.find((row) => row.level === 17);
+        if (!total) {
+          return;
+        }
+
+        const holderCount = total.people;
+        const totalShares = total.shares;
+        const avgLotsPerHolder = holderCount ? Math.round((totalShares / 1000 / holderCount) * 100) / 100 : 0;
+        const rows400Up = rows.filter((row) => row.level >= 12 && row.level <= 15);
+        const rows1000Up = rows.filter((row) => row.level === 15);
+        const rowsSmall = rows.filter((row) => row.level >= 1 && row.level <= 4);
+        const sum = (items, key) => items.reduce((totalValue, item) => totalValue + item[key], 0);
+
+        summary[code] = {
+          snapshotDate,
+          holderCount,
+          totalShares,
+          avgLotsPerHolder,
+          holders400Up: sum(rows400Up, "people"),
+          shares400Up: sum(rows400Up, "shares"),
+          ratio400Up: Math.round(sum(rows400Up, "ratio") * 100) / 100,
+          holders1000Up: sum(rows1000Up, "people"),
+          shares1000Up: sum(rows1000Up, "shares"),
+          ratio1000Up: Math.round(sum(rows1000Up, "ratio") * 100) / 100,
+          ratioSmallHolders: Math.round(sum(rowsSmall, "ratio") * 100) / 100
+        };
+      });
+
+      return { snapshotDate, snapshotMap: summary };
+    }
+
+    function parseTdccCsv(text) {
+      const lines = text.trim().split(/\r?\n/);
+      if (lines.length < 2 || !lines[0].includes("證券代號")) {
+        throw new Error("TDCC CSV 格式不正確。");
+      }
+
+      const rowsByCode = {};
+      lines.slice(1).forEach((line) => {
+        const [dateRaw, codeRaw, levelRaw, peopleRaw, sharesRaw, ratioRaw] = line.split(",");
+        const code = (codeRaw || "").trim();
+        if (!code) {
+          return;
+        }
+        if (!rowsByCode[code]) {
+          rowsByCode[code] = [];
+        }
+        rowsByCode[code].push({
+          date: (dateRaw || "").trim(),
+          level: Number((levelRaw || "").trim()) || 0,
+          people: Number((peopleRaw || "").replaceAll(",", "").trim()) || 0,
+          shares: Number((sharesRaw || "").replaceAll(",", "").trim()) || 0,
+          ratio: Number((ratioRaw || "").replaceAll(",", "").trim()) || 0
+        });
+      });
+
+      return summarizeTdccRows(rowsByCode);
+    }
+
+    async function loadTdccSnapshot() {
+      try {
+        const moduleUrl = `./tdcc_snapshot.js?v=${Date.now()}`;
+        const mod = await import(moduleUrl);
+        if (!mod?.TDCC_SNAPSHOT_MAP || typeof mod.TDCC_SNAPSHOT_MAP !== "object") {
+          throw new Error("TDCC 快照模組缺少必要欄位。");
+        }
+        tdccSnapshotDate = mod.TDCC_SNAPSHOT_DATE || "";
+        tdccSnapshotMap = mod.TDCC_SNAPSHOT_MAP;
+        return;
+      } catch (snapshotError) {
+        console.warn("讀取 tdcc_snapshot.js 失敗，改用 CSV 解析：", snapshotError);
+      }
+
+      const response = await fetch(`./tdcc_shareholding_latest.csv?v=${Date.now()}`);
+      if (!response.ok) {
+        throw new Error(`TDCC CSV 載入失敗：HTTP ${response.status}`);
+      }
+      const text = await response.text();
+      const parsed = parseTdccCsv(text);
+      tdccSnapshotDate = parsed.snapshotDate;
+      tdccSnapshotMap = parsed.snapshotMap;
     }
 
     function findBestPositiveStreak(detailRows) {
@@ -1777,7 +1963,7 @@
 
     function buildChipChecks(candidates) {
       return candidates.map((candidate) => {
-        const chip = TDCC_SNAPSHOT_MAP[candidate.code];
+        const chip = tdccSnapshotMap[candidate.code];
         if (!chip) {
           return {
             code: candidate.code,
@@ -1859,6 +2045,11 @@
         return;
       }
 
+      if (!Object.keys(tdccSnapshotMap).length) {
+        smartMoneyStatusEl.textContent = "TDCC 資料尚未準備好，請稍候再試。";
+        return;
+      }
+
       smartMoneyStatusEl.textContent = "正在用實際 TWSE 與 TDCC 資料計算...";
       const candidates = buildInstitutionCandidates(context);
       const chipChecks = buildChipChecks(candidates);
@@ -1903,12 +2094,19 @@
       );
 
       smartMoneyStatusEl.textContent =
-        `已完成公開資料策略：法人候選 ${candidates.length} 檔，最終結果 ${report.length} 檔。TDCC 快照日為 ${formatSnapshotDate(TDCC_SNAPSHOT_DATE)}。`;
+        `已完成公開資料策略：法人候選 ${candidates.length} 檔，最終結果 ${report.length} 檔。TDCC 快照日為 ${formatSnapshotDate(tdccSnapshotDate)}。`;
     }
 
     runSmartMoneyBtn.addEventListener("click", runPublicStrategy);
     window.addEventListener("foreign-data-updated", runPublicStrategy);
-    runPublicStrategy();
+    loadTdccSnapshot()
+      .then(() => {
+        runPublicStrategy();
+      })
+      .catch((error) => {
+        console.error(error);
+        smartMoneyStatusEl.textContent = `TDCC 資料載入失敗：${error.message}`;
+      });
   </script>
 </body>
 </html>
